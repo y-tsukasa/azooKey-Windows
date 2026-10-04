@@ -1038,6 +1038,27 @@ impl TextServiceFactory {
         app_config: &AppConfig,
         romaji_lookup: &RomajiLookup,
     ) -> Option<String> {
+        if app_config.general.kana_input {
+            // かな入力の「ー」はキー配列で決まった文字なので、記号の全角半角設定で書き換えない。
+            if !input.is_ascii() {
+                return None;
+            }
+            // サーバーのかな入力テーブルは記号を変換しないので、ローマ字の文脈を見ずにここで確定する。
+            Self::single_symbol_candidates(input)?;
+            return Some(
+                Self::single_symbol_romaji_output_with_lookup(input, romaji_lookup).unwrap_or_else(
+                    || {
+                        convert_kana_symbol(
+                            input,
+                            &app_config.general,
+                            &app_config.character_width,
+                            &app_config.romaji_table.rows,
+                        )
+                    },
+                ),
+            );
+        }
+
         let symbols = Self::single_symbol_candidates(input)?;
         let is_zenzai_enabled = Self::effective_zenzai_runtime_enabled(app_config);
         if is_zenzai_enabled {

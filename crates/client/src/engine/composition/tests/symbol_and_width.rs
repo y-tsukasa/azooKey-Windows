@@ -88,6 +88,28 @@ fn zenzai_symbol_input_falls_back_to_width_setting_without_symbol_rule() {
 }
 
 #[test]
+fn kana_input_keeps_prolonged_sound_mark_regardless_of_width_setting() {
+    let mut app_config = AppConfig::default();
+    app_config.general.kana_input = true;
+    app_config.character_width.groups.math_symbol = WidthMode::Half;
+
+    let output = TextServiceFactory::resolve_symbol_input_text("か", "ー", &app_config);
+    assert_eq!(output, None);
+}
+
+#[test]
+fn kana_input_still_resolves_ascii_punctuation() {
+    let mut app_config = AppConfig::default();
+    app_config.general.kana_input = true;
+
+    let output = TextServiceFactory::resolve_symbol_input_text("か", ",", &app_config);
+    assert_eq!(output, Some("、".to_string()));
+
+    let output = TextServiceFactory::resolve_symbol_input_text("か", "[", &app_config);
+    assert_eq!(output, Some("「".to_string()));
+}
+
+#[test]
 fn zenzai_symbol_input_keeps_default_multi_character_dash_sequence() {
     let mut app_config = AppConfig::default();
     app_config.zenzai.enable = true;
