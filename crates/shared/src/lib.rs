@@ -642,6 +642,8 @@ pub struct GeneralConfig {
     pub live_conversion_reading_vertical_adjustment: i32,
     #[serde(default)]
     pub experimental_typo_correction: bool,
+    #[serde(default)]
+    pub kana_input: bool,
 }
 
 impl Default for GeneralConfig {
@@ -660,6 +662,7 @@ impl Default for GeneralConfig {
             live_conversion_reading_vertical_adjustment:
                 LIVE_CONVERSION_READING_VERTICAL_ADJUSTMENT_DEFAULT,
             experimental_typo_correction: false,
+            kana_input: false,
         }
     }
 }
@@ -854,6 +857,17 @@ mod tests {
         let enabled: GeneralConfig =
             serde_json::from_str(r#"{"experimental_typo_correction":true}"#).unwrap();
         assert!(enabled.experimental_typo_correction);
+    }
+
+    #[test]
+    fn kana_input_defaults_to_off() {
+        assert!(!GeneralConfig::default().kana_input);
+
+        let deserialized: GeneralConfig = serde_json::from_str("{}").unwrap();
+        assert!(!deserialized.kana_input);
+
+        let enabled: GeneralConfig = serde_json::from_str(r#"{"kana_input":true}"#).unwrap();
+        assert!(enabled.kana_input);
     }
 
     #[test]

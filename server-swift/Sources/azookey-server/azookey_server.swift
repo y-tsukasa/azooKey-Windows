@@ -27,6 +27,7 @@ private let fallbackDictionaryURL =
 @MainActor var composingTextSnapshots: [ComposingText] = []
 @MainActor var currentInputStyle: InputStyle = .roman2kana
 @MainActor var customRomajiTableEnabled = false
+@MainActor var kanaInputEnabled = false
 @MainActor var currentLearningType: LearningType = .inputAndOutput
 @MainActor var currentLearningMemoryDirectoryURL: URL?
 @MainActor var learningCandidateCache = LearningCandidateCache()
@@ -1194,6 +1195,7 @@ private struct AppSettings: Decodable {
 
 private struct GeneralSettings: Decodable {
     let experimental_typo_correction: Bool?
+    let kana_input: Bool?
 }
 
 private struct LearningSettings: Decodable {
@@ -1273,6 +1275,14 @@ private func cpuZenzaiBackendSupportedFromEnvironment() -> Bool {
 @MainActor private func setRoman2KanaInputStyle() {
     currentInputStyle = .roman2kana
     customRomajiTableEnabled = false
+    kanaInputEnabled = false
+}
+
+@MainActor func setKanaInputStyle() {
+    InputStyleManager.registerInputStyle(table: makeKanaInputTable(), for: kanaInputTableName)
+    currentInputStyle = .mapped(id: .tableName(kanaInputTableName))
+    customRomajiTableEnabled = false
+    kanaInputEnabled = true
 }
 
 @MainActor private func setCustomRomajiInputStyle(rows: [RomajiTableRow]?) {
@@ -2483,6 +2493,7 @@ func cursorPrefixBoundaryFirstClauseResults(
         cpuBackendSupported: cpuZenzaiBackendSupportedFromEnvironment()
     )
     let previousUsedCustomRomajiTable = customRomajiTableEnabled
+    let previousKanaInputEnabled = kanaInputEnabled
     let previousLearningType = currentLearningType
     let previousLearningMemoryDirectoryURL = currentLearningMemoryDirectoryURL
     var dynamicUserDictionary: [DicdataElement] = []
@@ -2522,7 +2533,11 @@ func cursorPrefixBoundaryFirstClauseResults(
             }
         }
 
-        applyRomajiInputStyle(rows: settings.romaji_table?.rows)
+        if settings.general?.kana_input == true {
+            setKanaInputStyle()
+        } else {
+            applyRomajiInputStyle(rows: settings.romaji_table?.rows)
+        }
         currentLearningType = learningType(for: settings.learning?.mode)
         config["experimentalTypoCorrection"] =
             settings.general?.experimental_typo_correction ?? false
@@ -2581,11 +2596,13 @@ func cursorPrefixBoundaryFirstClauseResults(
         cpuBackendSupported: cpuZenzaiBackendSupportedFromEnvironment()
     )
     let currentUsedCustomRomajiTable = customRomajiTableEnabled
+    let currentKanaInputEnabled = kanaInputEnabled
     let backendChanged = normalizedZenzaiBackend(previousBackend) != normalizedZenzaiBackend(currentBackend)
     if previousEffectiveZenzaiEnabled != currentEffectiveZenzaiEnabled
         || previousProfile != currentProfile
         || backendChanged
         || previousUsedCustomRomajiTable != currentUsedCustomRomajiTable
+        || previousKanaInputEnabled != currentKanaInputEnabled
         || previousExperimentalTypoCorrection != currentExperimentalTypoCorrection
     {
         if backendChanged {
@@ -2608,7 +2625,7 @@ func cursorPrefixBoundaryFirstClauseResults(
 
     serverLog(
         "INFO",
-        "LoadConfig: completed enable=\(currentZenzaiEnabled) backend=\(currentBackend) effectiveEnable=\(currentEffectiveZenzaiEnabled) customRomaji=\(currentUsedCustomRomajiTable) learningType=\(currentLearningType) experimentalTypoCorrection=\(currentExperimentalTypoCorrection)"
+        "LoadConfig: completed enable=\(currentZenzaiEnabled) backend=\(currentBackend) effectiveEnable=\(currentEffectiveZenzaiEnabled) customRomaji=\(currentUsedCustomRomajiTable) kanaInput=\(currentKanaInputEnabled) learningType=\(currentLearningType) experimentalTypoCorrection=\(currentExperimentalTypoCorrection)"
     )
 }
 

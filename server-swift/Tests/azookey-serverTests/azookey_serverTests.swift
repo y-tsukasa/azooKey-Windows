@@ -3272,3 +3272,40 @@ private func testCandidate(
     #expect(clause.convertTarget == "あるていど")
     #expect(clause.input.count == 8)
 }
+
+@MainActor private func kanaInputComposingText(_ keys: String) -> ComposingText {
+    InputStyleManager.registerInputStyle(table: makeKanaInputTable(), for: kanaInputTableName)
+    var text = ComposingText()
+    for key in keys {
+        text.insertAtCursorPosition(String(key), inputStyle: .mapped(id: .tableName(kanaInputTableName)))
+    }
+    return text
+}
+
+@Test func kanaInputTableCombinesDakutenAndHandakuten() async throws {
+    let text = await MainActor.run { kanaInputComposingText("か゛は゜う゛ゝ゛") }
+
+    #expect(text.convertTarget == "がぱゔゞ")
+}
+
+@Test func kanaInputTableKeepsStandaloneMarks() async throws {
+    let text = await MainActor.run { kanaInputComposingText("あ゛゜ま゜") }
+
+    #expect(text.convertTarget == "あ゛゜ま゜")
+}
+
+@Test func kanaInputTablePassesThroughPlainKanaAndSymbols() async throws {
+    let text = await MainActor.run { kanaInputComposingText("ろーを、。") }
+
+    #expect(text.convertTarget == "ろーを、。")
+}
+
+@Test func kanaInputBackspaceRemovesWholeVoicedKana() async throws {
+    let text = await MainActor.run {
+        var text = kanaInputComposingText("たた゛")
+        text.deleteBackwardFromCursorPosition(count: 1)
+        return text
+    }
+
+    #expect(text.convertTarget == "た")
+}

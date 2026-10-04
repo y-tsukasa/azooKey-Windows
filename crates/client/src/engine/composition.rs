@@ -27,6 +27,7 @@ use super::{
         is_non_destructive_ipc_error, requires_ipc_recovery, Candidates, ClauseSnapshotOperation,
         ClientInputTraceGuard, IPCService, WindowRpcDelivery,
     },
+    kana_layout::jis_kana_for_key,
     romaji_lookup::RomajiLookup,
     state::{keyboard_disabled_from_context, AppConfigSnapshot, IMEState},
     text_util::{to_half_katakana, to_katakana},
@@ -573,6 +574,26 @@ impl TextServiceFactory {
     #[inline]
     fn is_shift_alphabet_shortcut(wparam: WPARAM, is_shift_pressed: bool) -> bool {
         is_shift_pressed && (0x41..=0x5A).contains(&wparam.0)
+    }
+
+    #[inline]
+    fn kana_input_char(
+        app_config: &AppConfig,
+        mode: &InputMode,
+        temporary_latin: bool,
+        has_command_modifier: bool,
+        is_shift_pressed: bool,
+        lparam: LPARAM,
+    ) -> Option<char> {
+        if !app_config.general.kana_input
+            || *mode != InputMode::Kana
+            || temporary_latin
+            || has_command_modifier
+        {
+            return None;
+        }
+
+        jis_kana_for_key(lparam.0, is_shift_pressed)
     }
 
     #[inline]
@@ -5809,7 +5830,18 @@ impl TextServiceFactory {
             let should_clear_shift_pending =
                 composition.temporary_latin_shift_pending && !is_shift_key;
 
-            let action = if is_alt_backquote || is_eisu {
+            let kana_input_char = Self::kana_input_char(
+                app_config,
+                &mode,
+                temporary_latin,
+                is_ctrl_pressed || is_alt_pressed,
+                is_shift_pressed,
+                lparam,
+            );
+
+            let action = if let Some(kana) = kana_input_char {
+                UserAction::Input(kana)
+            } else if is_alt_backquote || is_eisu {
                 UserAction::ToggleInputMode
             } else if is_ctrl_enter {
                 UserAction::CommitFirstClause
@@ -5829,7 +5861,9 @@ impl TextServiceFactory {
                 action,
                 is_shift_pressed,
                 is_shift_key,
-                shift_alphabet_shortcut: Self::is_shift_alphabet_shortcut(wparam, is_shift_pressed),
+                // かな入力では Shift+英字も かな（ぃ・っ など）なので一時英字モードに入らない。
+                shift_alphabet_shortcut: kana_input_char.is_none()
+                    && Self::is_shift_alphabet_shortcut(wparam, is_shift_pressed),
             };
 
             if has_deferred_input {

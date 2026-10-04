@@ -44,6 +44,7 @@ type GeneralConfigState = {
     show_live_conversion_reading: boolean;
     live_conversion_reading_vertical_adjustment: number;
     experimental_typo_correction: boolean;
+    kana_input: boolean;
 };
 
 type CharacterWidthGroupsState = {
@@ -102,6 +103,7 @@ const DEFAULT_GENERAL_CONFIG: GeneralConfigState = {
     show_live_conversion_reading: true,
     live_conversion_reading_vertical_adjustment: 4,
     experimental_typo_correction: false,
+    kana_input: false,
 };
 
 const LIVE_CONVERSION_READING_VERTICAL_ADJUSTMENT_MIN = -12;
@@ -257,6 +259,10 @@ const normalizeGeneralConfig = (value?: Record<string, unknown>): GeneralConfigS
         typeof value?.experimental_typo_correction === "boolean"
             ? value.experimental_typo_correction
             : DEFAULT_GENERAL_CONFIG.experimental_typo_correction,
+    kana_input:
+        typeof value?.kana_input === "boolean"
+            ? value.kana_input
+            : DEFAULT_GENERAL_CONFIG.kana_input,
 });
 
 const normalizeLearningMode = (value?: unknown): LearningMode => {
@@ -551,6 +557,7 @@ export const General = () => {
             | "show_live_conversion_reading"
             | "live_conversion_reading_vertical_adjustment"
             | "experimental_typo_correction"
+            | "kana_input"
         >,
         nextValue: string,
     ) => {
@@ -572,7 +579,8 @@ export const General = () => {
             | "punctuation_commit_question"
             | "show_candidate_window_after_space"
             | "show_live_conversion_reading"
-            | "experimental_typo_correction",
+            | "experimental_typo_correction"
+            | "kana_input",
         nextValue: boolean,
     ) => {
         const data = await updateConfig((config) => {
@@ -1125,6 +1133,22 @@ export const General = () => {
                 <section className="space-y-3">
                     <h1 className="text-sm font-bold text-foreground">キー設定</h1>
                     <div className="space-y-3 rounded-md border p-4">
+                        <div className="flex items-center gap-4">
+                            <Keyboard className="h-4 w-4" />
+                            <div className="flex-1 space-y-1">
+                                <p className="text-sm font-medium leading-none">かな入力</p>
+                                <p className="text-xs text-muted-foreground">
+                                    JIS かな配列で入力します。有効な間はローマ字テーブルを使いません。
+                                </p>
+                            </div>
+                            <Switch
+                                aria-label="かな入力"
+                                checked={generalValue.kana_input}
+                                onCheckedChange={(value) =>
+                                    void updateGeneralBooleanConfig("kana_input", value)
+                                }
+                            />
+                        </div>
                         <div className="flex items-center gap-4">
                             <Table2 className="h-4 w-4" />
                             <div className="flex-1">
