@@ -16,7 +16,7 @@ use shared::proto::{
     ShrinkTextRequest, ShrinkTextResponse, StartReconversionRequest, StartReconversionResponse,
     Suggestion, UpdateCompositionSnapshotRequest, UpdateCompositionSnapshotResponse,
 };
-use shared::{server_pipe_path, AppConfig};
+use shared::{server_pipe_path, AppConfig, ConfigError, ConfigWriteGuard};
 
 use std::{
     backtrace::Backtrace,
@@ -742,6 +742,18 @@ fn configure_server_logging(config: &AppConfig) -> Option<LogPaths> {
     }
 
     paths
+}
+
+/// 設定ファイルの `general.kana_input` を有効にする。すでに有効なら書き込まない。
+fn enable_kana_input_in_settings() -> Result<bool, ConfigError> {
+    let _write_guard = ConfigWriteGuard::acquire()?;
+    let mut config = AppConfig::read()?;
+    if config.general.kana_input {
+        return Ok(false);
+    }
+    config.general.kana_input = true;
+    config.write()?;
+    Ok(true)
 }
 
 fn reload_server_logging_from_settings() -> Option<LogPaths> {
@@ -2565,6 +2577,29 @@ impl AzookeyService for MyAzookeyService {
         );
         Ok(Response::new(shared::proto::UpdateConfigResponse {
             server_session_id: server_session_id(),
+        }))
+    }
+
+    async fn enable_kana_input(
+        &self,
+        request: Request<shared::proto::EnableKanaInputRequest>,
+    ) -> Result<Response<shared::proto::EnableKanaInputResponse>, Status> {
+        // IME DLL は各アプリのプロセス内で動き、サンドボックスでは設定を書けないことがある。
+        // 管理 RPC ではなく通常の接続で受け付ける代わりに、できる操作を有効化だけに絞る。
+        PipeClient::authorize_connection(&request)?;
+        let _mutation_guard = self.mutation_lock.lock().await;
+        let request = request.into_inner();
+        let _request_guard = ServerRequestGuard::begin(false);
+        set_request_id(request_id_or_next(request.request_id));
+        let changed = enable_kana_input_in_settings()
+            .map_err(|error| Status::internal(format!("failed to enable kana input: {error:?}")))?;
+        if changed {
+            unsafe { LoadConfig() };
+            HAS_ACTIVE_COMPOSITION.store(query_active_composition_state(), Ordering::Relaxed);
+        }
+        Ok(Response::new(shared::proto::EnableKanaInputResponse {
+            server_session_id: server_session_id(),
+            changed,
         }))
     }
 

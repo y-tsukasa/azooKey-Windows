@@ -1502,6 +1502,21 @@ impl IPCService {
         Ok(())
     }
 
+    fn send_enable_kana_input(&mut self, request_id: u64) -> anyhow::Result<bool> {
+        let mut request = tonic::Request::new(shared::proto::EnableKanaInputRequest { request_id });
+        request.set_timeout(STATE_RPC_DEADLINE);
+        let response = Self::block_on_server_rpc(
+            self.runtime.as_ref(),
+            &self.recovery,
+            "enable_kana_input",
+            STATE_RPC_DEADLINE,
+            self.azookey_client.enable_kana_input(request),
+        )?;
+        let response = response.into_inner();
+        self.observe_server_session("enable_kana_input", response.server_session_id);
+        Ok(response.changed)
+    }
+
     fn send_replace_composition(
         &mut self,
         input_ledger: &InputLedger,
@@ -2376,6 +2391,15 @@ impl IPCService {
         );
 
         result.map(|((), _)| ())
+    }
+
+    /// 設定の「かな入力」を有効にする。書き込みは設定ファイルを扱える変換サーバーに任せる。
+    pub fn enable_kana_input(&mut self) -> anyhow::Result<bool> {
+        let request_id = current_or_next_request_id();
+        self.run_rpc_with_reconnect("enable_kana_input", |this| {
+            this.send_enable_kana_input(request_id)
+        })
+        .map(|(changed, _)| changed)
     }
 }
 

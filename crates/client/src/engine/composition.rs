@@ -576,6 +576,23 @@ impl TextServiceFactory {
         is_shift_pressed && (0x41..=0x5A).contains(&wparam.0)
     }
 
+    /// カタカナひらがなキー: かな入力を有効にしてひらがな入力へ切り替える（一方向）。
+    #[inline]
+    fn enable_kana_input_actions(
+        app_config: &AppConfig,
+        end_composition: bool,
+    ) -> Vec<ClientAction> {
+        let mut actions = Vec::with_capacity(3);
+        if end_composition {
+            actions.push(ClientAction::EndComposition);
+        }
+        if !app_config.general.kana_input {
+            actions.push(ClientAction::EnableKanaInput);
+        }
+        actions.push(ClientAction::SetIMEMode(InputMode::Kana));
+        actions
+    }
+
     #[inline]
     fn kana_input_char(
         app_config: &AppConfig,
@@ -1891,6 +1908,7 @@ impl TextServiceFactory {
             ClientAction::MoveClause(_) => "MoveClause",
             ClientAction::AdjustBoundary(_) => "AdjustBoundary",
             ClientAction::SetIMEMode(_) => "SetIMEMode",
+            ClientAction::EnableKanaInput => "EnableKanaInput",
             ClientAction::SetSelection(_) => "SetSelection",
             ClientAction::CommitLearning { .. } => "CommitLearning",
             ClientAction::ShrinkText(_) => "ShrinkText",
@@ -4889,6 +4907,10 @@ impl TextServiceFactory {
                     CompositionState::None,
                     vec![ClientAction::SetIMEMode(InputMode::Latin)],
                 )),
+                UserAction::EnableKanaInput => Some((
+                    CompositionState::None,
+                    Self::enable_kana_input_actions(app_config, false),
+                )),
                 _ => None,
             },
             CompositionState::Composing => match action {
@@ -5029,6 +5051,14 @@ impl TextServiceFactory {
                         ClientAction::EndComposition,
                         ClientAction::SetIMEMode(InputMode::Latin),
                     ],
+                )),
+                // すでにかな入力なら変換中の文字列はそのまま残す。
+                UserAction::EnableKanaInput if app_config.general.kana_input => {
+                    Some((composition.state.clone(), Vec::new()))
+                }
+                UserAction::EnableKanaInput => Some((
+                    CompositionState::None,
+                    Self::enable_kana_input_actions(app_config, true),
                 )),
                 UserAction::Space | UserAction::Tab | UserAction::Reconvert => Some((
                     CompositionState::Previewing,
@@ -5171,6 +5201,14 @@ impl TextServiceFactory {
                         ClientAction::EndComposition,
                         ClientAction::SetIMEMode(InputMode::Latin),
                     ],
+                )),
+                // すでにかな入力なら変換中の文字列はそのまま残す。
+                UserAction::EnableKanaInput if app_config.general.kana_input => {
+                    Some((composition.state.clone(), Vec::new()))
+                }
+                UserAction::EnableKanaInput => Some((
+                    CompositionState::None,
+                    Self::enable_kana_input_actions(app_config, true),
                 )),
                 UserAction::Space | UserAction::Tab | UserAction::Reconvert => Some((
                     CompositionState::Previewing,
@@ -8089,6 +8127,12 @@ impl TextServiceFactory {
                                 &clause_snapshots,
                                 &future_clause_snapshots,
                             );
+                        }
+                    }
+                    ClientAction::EnableKanaInput => {
+                        // 設定の書き込みに失敗しても、ひらがなモードへの切り替えは続ける。
+                        if let Err(error) = ipc_service.enable_kana_input() {
+                            tracing::warn!("enable_kana_input failed: {error:?}");
                         }
                     }
                     ClientAction::SetIMEMode(mode) => {

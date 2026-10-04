@@ -34,6 +34,7 @@ pub enum ClientAction {
     SetTemporaryLatinShiftPending(bool),
 
     SetIMEMode(InputMode),
+    EnableKanaInput,
 }
 
 #[derive(Clone, Debug, PartialEq)]

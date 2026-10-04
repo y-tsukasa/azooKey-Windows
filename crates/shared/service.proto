@@ -221,6 +221,15 @@ message UpdateConfigResponse {
   uint64 server_session_id = 1; // Identifies the current server process session.
 }
 
+// かなキーから「かな入力」を有効にする。設定を書き換えられるのは有効化だけ。
+message EnableKanaInputRequest {
+  uint64 request_id = 1;
+}
+message EnableKanaInputResponse {
+  uint64 server_session_id = 1; // Identifies the current server process session.
+  bool changed = 2;
+}
+
 enum LearningCommitKind {
   LEARNING_COMMIT_KIND_UNSPECIFIED = 0;
   LEARNING_COMMIT_KIND_NORMAL = 1;
@@ -289,6 +298,7 @@ service AzookeyService {
   rpc ClearText (ClearTextRequest) returns (ClearTextResponse);
   rpc SetContext (SetContextRequest) returns (SetContextResponse);
   rpc UpdateConfig (UpdateConfigRequest) returns (UpdateConfigResponse);
+  rpc EnableKanaInput (EnableKanaInputRequest) returns (EnableKanaInputResponse);
   rpc CommitLearningCandidate (CommitLearningCandidateRequest) returns (CommitLearningCandidateResponse);
   rpc CommitLearningCandidates (CommitLearningCandidatesRequest) returns (CommitLearningCandidatesResponse);
   rpc ResetLearningMemory (ResetLearningMemoryRequest) returns (ResetLearningMemoryResponse);

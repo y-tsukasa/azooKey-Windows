@@ -869,6 +869,102 @@ fn standard_reconversion_is_only_exposed_for_idle_win_slash() {
 }
 
 #[test]
+fn kana_key_enables_kana_input_and_turns_on_hiragana_mode() {
+    let (transition, actions) = TextServiceFactory::plan_actions_for_user_action(
+        &Composition::default(),
+        &UserAction::EnableKanaInput,
+        &InputMode::Latin,
+        false,
+        &AppConfig::default(),
+        false,
+    )
+    .expect("kana key should be handled");
+
+    assert_eq!(transition, CompositionState::None);
+    assert_eq!(
+        actions,
+        vec![
+            ClientAction::EnableKanaInput,
+            ClientAction::SetIMEMode(InputMode::Kana),
+        ]
+    );
+}
+
+#[test]
+fn kana_key_only_switches_mode_when_kana_input_is_already_enabled() {
+    let mut app_config = AppConfig::default();
+    app_config.general.kana_input = true;
+
+    let (_, actions) = TextServiceFactory::plan_actions_for_user_action(
+        &Composition::default(),
+        &UserAction::EnableKanaInput,
+        &InputMode::Kana,
+        false,
+        &app_config,
+        false,
+    )
+    .expect("kana key should be handled");
+
+    assert_eq!(actions, vec![ClientAction::SetIMEMode(InputMode::Kana)]);
+}
+
+#[test]
+fn kana_key_keeps_composition_when_kana_input_is_already_enabled() {
+    let mut app_config = AppConfig::default();
+    app_config.general.kana_input = true;
+
+    for state in [CompositionState::Composing, CompositionState::Previewing] {
+        let composition = Composition {
+            state: state.clone(),
+            raw_input: "かな".to_string(),
+            ..Composition::default()
+        };
+
+        let (transition, actions) = TextServiceFactory::plan_actions_for_user_action(
+            &composition,
+            &UserAction::EnableKanaInput,
+            &InputMode::Kana,
+            false,
+            &app_config,
+            false,
+        )
+        .expect("kana key should be consumed");
+
+        assert_eq!(transition, state);
+        assert!(actions.is_empty());
+    }
+}
+
+#[test]
+fn kana_key_commits_composition_before_enabling_kana_input() {
+    let composition = Composition {
+        state: CompositionState::Composing,
+        raw_input: "kana".to_string(),
+        ..Composition::default()
+    };
+
+    let (transition, actions) = TextServiceFactory::plan_actions_for_user_action(
+        &composition,
+        &UserAction::EnableKanaInput,
+        &InputMode::Kana,
+        false,
+        &AppConfig::default(),
+        false,
+    )
+    .expect("kana key should be handled");
+
+    assert_eq!(transition, CompositionState::None);
+    assert_eq!(
+        actions,
+        vec![
+            ClientAction::EndComposition,
+            ClientAction::EnableKanaInput,
+            ClientAction::SetIMEMode(InputMode::Kana),
+        ]
+    );
+}
+
+#[test]
 fn escape_restores_the_original_text_during_reconversion() {
     for state in [CompositionState::Composing, CompositionState::Previewing] {
         let composition = Composition {

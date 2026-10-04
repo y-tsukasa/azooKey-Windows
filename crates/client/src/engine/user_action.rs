@@ -24,6 +24,7 @@ pub enum UserAction {
     ToggleInputMode,
     InputModeOn,
     InputModeOff,
+    EnableKanaInput,
     Reconvert,
 }
 
@@ -192,6 +193,7 @@ impl TryFrom<usize> for UserAction {
             0x1C => UserAction::Reconvert,               // VK_CONVERT
 
             0xF3 | 0xF4 => UserAction::ToggleInputMode, // Zenkaku/Hankaku
+            0xF2 => UserAction::EnableKanaInput,        // Katakana/Hiragana
 
             _ => {
                 let key_state = {
@@ -257,6 +259,13 @@ mod tests {
         let action = UserAction::try_from(0x2E).expect("VK_DELETE should map");
 
         assert!(matches!(action, UserAction::Delete));
+    }
+
+    #[test]
+    fn katakana_hiragana_key_maps_to_enable_kana_input() {
+        let action = UserAction::try_from(0xF2).expect("VK_DBE_HIRAGANA should map");
+
+        assert!(matches!(action, UserAction::EnableKanaInput));
     }
 
     #[test]
