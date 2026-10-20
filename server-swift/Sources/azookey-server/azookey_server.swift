@@ -28,6 +28,8 @@ private let fallbackDictionaryURL =
 @MainActor var currentInputStyle: InputStyle = .roman2kana
 @MainActor var customRomajiTableEnabled = false
 @MainActor var kanaInputEnabled = false
+// 直前の編集が削除だったか。ライブ変換では削除の直後は読みのまま表示する（azooKey macOS と同じ）。
+@MainActor var lastCompositionEditWasDeletion = false
 @MainActor var currentLearningType: LearningType = .inputAndOutput
 @MainActor var currentLearningMemoryDirectoryURL: URL?
 @MainActor var learningCandidateCache = LearningCandidateCache()
@@ -40,6 +42,7 @@ private let fallbackDictionaryURL =
     "profile": "",
     "backend": "cpu",
     "experimentalTypoCorrection": false,
+    "liveConversionMinLength": defaultLiveConversionMinLength,
 ]
 let maxUserDictionaryEntryCount = 50
 let minInputCountForZenzaiCandidates = 4
@@ -1196,6 +1199,7 @@ private struct AppSettings: Decodable {
 private struct GeneralSettings: Decodable {
     let experimental_typo_correction: Bool?
     let kana_input: Bool?
+    let live_conversion_min_length: Int?
 }
 
 private struct LearningSettings: Decodable {
@@ -2512,6 +2516,7 @@ func cursorPrefixBoundaryFirstClauseResults(
     config["profile"] = ""
     config["backend"] = "cpu"
     config["experimentalTypoCorrection"] = false
+    config["liveConversionMinLength"] = defaultLiveConversionMinLength
     setRoman2KanaInputStyle()
     currentLearningType = .inputAndOutput
     currentLearningMemoryDirectoryURL = learningMemoryDirectoryURL(settingsPath: loadedSettingsPath)
@@ -2541,6 +2546,9 @@ func cursorPrefixBoundaryFirstClauseResults(
         currentLearningType = learningType(for: settings.learning?.mode)
         config["experimentalTypoCorrection"] =
             settings.general?.experimental_typo_correction ?? false
+        config["liveConversionMinLength"] = normalizedLiveConversionMinLength(
+            settings.general?.live_conversion_min_length
+        )
 
         let sourceEntries = settings.user_dictionary?.entries ?? []
         var seen: Set<String> = []
@@ -2751,6 +2759,7 @@ func cursorPrefixBoundaryFirstClauseResults(
     let inputString = String(cString: input)
     serverLog("DEBUG", "AppendText: start inputLength=\(inputString.count) inputStyle=\(String(describing: currentInputStyle))")
     composingText.insertAtCursorPosition(inputString, inputStyle: currentInputStyle)
+    lastCompositionEditWasDeletion = false
 
     cursorPtr.pointee = CInt(composingText.convertTargetCursorPosition)
     serverLog(
@@ -2769,6 +2778,7 @@ func cursorPrefixBoundaryFirstClauseResults(
     let inputString = String(cString: input)
     serverLog("DEBUG", "AppendTextDirect: start inputLength=\(inputString.count)")
     composingText.insertAtCursorPosition(inputString, inputStyle: .direct)
+    lastCompositionEditWasDeletion = false
 
     cursorPtr.pointee = CInt(composingText.convertTargetCursorPosition)
     serverLog(
@@ -2785,6 +2795,7 @@ func cursorPrefixBoundaryFirstClauseResults(
     discardPinnedLearningCandidatesBeforeCompositionEdit()
     serverLog("DEBUG", "RemoveText: start")
     composingText.deleteBackwardFromCursorPosition(count: 1)
+    lastCompositionEditWasDeletion = true
 
     cursorPtr.pointee = CInt(composingText.convertTargetCursorPosition)
     serverLog(
@@ -3015,6 +3026,7 @@ func cursorPrefixBoundaryFirstClauseResults(
     normalNBestSupplementConverter.stopComposition()
     composingText = ComposingText()
     composingTextSnapshots.removeAll()
+    lastCompositionEditWasDeletion = false
     clearLearningCandidateCache()
     serverLog("DEBUG", "ClearText: completed")
 }
@@ -3200,17 +3212,18 @@ public func free_candidate_list(
 
 @_silgen_name("GetComposedText")
 @MainActor public func get_composed_text(lengthPtr: UnsafeMutablePointer<CInt>) -> UnsafeMutablePointer<UnsafeMutablePointer<FFICandidate>?> {
-    get_composed_text_impl(lengthPtr: lengthPtr, allowZenzai: true)
+    get_composed_text_impl(lengthPtr: lengthPtr, allowZenzai: true, appliesLiveConversionReadingRule: true)
 }
 
 @_silgen_name("GetComposedTextForReconversion")
 @MainActor public func get_composed_text_for_reconversion(lengthPtr: UnsafeMutablePointer<CInt>) -> UnsafeMutablePointer<UnsafeMutablePointer<FFICandidate>?> {
-    get_composed_text_impl(lengthPtr: lengthPtr, allowZenzai: false)
+    get_composed_text_impl(lengthPtr: lengthPtr, allowZenzai: false, appliesLiveConversionReadingRule: false)
 }
 
 @MainActor private func get_composed_text_impl(
     lengthPtr: UnsafeMutablePointer<CInt>,
-    allowZenzai: Bool
+    allowZenzai: Bool,
+    appliesLiveConversionReadingRule: Bool
 ) -> UnsafeMutablePointer<UnsafeMutablePointer<FFICandidate>?> {
     let functionStart = performanceNow()
     let performanceEnabled = serverLogCallbacks.isPerformanceLogEnabled()
@@ -3291,10 +3304,19 @@ public func free_candidate_list(
             hiragana: previewHiragana
         )
     } ?? converted.mainResults
-    let mainResults = prioritizeLearningSelectionOverrides(
+    let learningPrioritizedResults = prioritizeLearningSelectionOverrides(
         mergedMainResults,
         ruby: previewHiragana
     ) { $0 }
+    let showsReading = appliesLiveConversionReadingRule
+        && liveConversionShowsReading(
+            hiraganaCount: originalHiragana.count,
+            minLength: (config["liveConversionMinLength"] as? Int) ?? defaultLiveConversionMinLength,
+            afterDeletion: lastCompositionEditWasDeletion
+        )
+    let mainResults = showsReading
+        ? prioritizeReadingCandidate(learningPrioritizedResults, reading: previewHiragana) { $0.text }
+        : learningPrioritizedResults
     if let normalNBestConverted {
         serverLog(
             "DEBUG",

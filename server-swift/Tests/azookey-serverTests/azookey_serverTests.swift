@@ -3309,3 +3309,25 @@ private func testCandidate(
 
     #expect(text.convertTarget == "た")
 }
+
+@Test func liveConversionShowsReadingForShortInputAndAfterDeletion() async throws {
+    #expect(liveConversionShowsReading(hiraganaCount: 1, minLength: 2, afterDeletion: false))
+    #expect(!liveConversionShowsReading(hiraganaCount: 2, minLength: 2, afterDeletion: false))
+    #expect(liveConversionShowsReading(hiraganaCount: 2, minLength: 3, afterDeletion: false))
+    #expect(liveConversionShowsReading(hiraganaCount: 5, minLength: 2, afterDeletion: true))
+    #expect(!liveConversionShowsReading(hiraganaCount: 1, minLength: 1, afterDeletion: false))
+    #expect(!liveConversionShowsReading(hiraganaCount: 0, minLength: 2, afterDeletion: true))
+}
+
+@Test func liveConversionMinLengthIsClamped() async throws {
+    #expect(normalizedLiveConversionMinLength(nil) == 2)
+    #expect(normalizedLiveConversionMinLength(0) == 1)
+    #expect(normalizedLiveConversionMinLength(3) == 3)
+    #expect(normalizedLiveConversionMinLength(99) == 10)
+}
+
+@Test func readingCandidateMovesToFront() async throws {
+    #expect(prioritizeReadingCandidate(["科", "課", "か", "カ"], reading: "か") { $0 } == ["か", "科", "課", "カ"])
+    #expect(prioritizeReadingCandidate(["か", "科"], reading: "か") { $0 } == ["か", "科"])
+    #expect(prioritizeReadingCandidate(["科", "課"], reading: "か") { $0 } == ["科", "課"])
+}

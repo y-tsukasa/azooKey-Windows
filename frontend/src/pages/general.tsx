@@ -45,6 +45,7 @@ type GeneralConfigState = {
     live_conversion_reading_vertical_adjustment: number;
     experimental_typo_correction: boolean;
     kana_input: boolean;
+    live_conversion_min_length: number;
 };
 
 type CharacterWidthGroupsState = {
@@ -104,7 +105,15 @@ const DEFAULT_GENERAL_CONFIG: GeneralConfigState = {
     live_conversion_reading_vertical_adjustment: 4,
     experimental_typo_correction: false,
     kana_input: false,
+    live_conversion_min_length: 2,
 };
+
+const LIVE_CONVERSION_MIN_LENGTH_OPTIONS = [1, 2, 3, 4, 5];
+
+const normalizeLiveConversionMinLength = (value: unknown): number =>
+    typeof value === "number" && LIVE_CONVERSION_MIN_LENGTH_OPTIONS.includes(value)
+        ? value
+        : DEFAULT_GENERAL_CONFIG.live_conversion_min_length;
 
 const LIVE_CONVERSION_READING_VERTICAL_ADJUSTMENT_MIN = -12;
 const LIVE_CONVERSION_READING_VERTICAL_ADJUSTMENT_MAX = 12;
@@ -263,6 +272,7 @@ const normalizeGeneralConfig = (value?: Record<string, unknown>): GeneralConfigS
         typeof value?.kana_input === "boolean"
             ? value.kana_input
             : DEFAULT_GENERAL_CONFIG.kana_input,
+    live_conversion_min_length: normalizeLiveConversionMinLength(value?.live_conversion_min_length),
 });
 
 const normalizeLearningMode = (value?: unknown): LearningMode => {
@@ -558,6 +568,7 @@ export const General = () => {
             | "live_conversion_reading_vertical_adjustment"
             | "experimental_typo_correction"
             | "kana_input"
+            | "live_conversion_min_length"
         >,
         nextValue: string,
     ) => {
@@ -595,6 +606,17 @@ export const General = () => {
 
     const updateCandidateWindowDelay = async (nextValue: boolean) => {
         await updateGeneralBooleanConfig("show_candidate_window_after_space", nextValue);
+    };
+
+    const updateLiveConversionMinLength = async (nextValue: number) => {
+        const data = await updateConfig((config) => {
+            config.general = config.general ?? {};
+            config.general.live_conversion_min_length = normalizeLiveConversionMinLength(nextValue);
+        });
+
+        if (data) {
+            setGeneralValue(normalizeGeneralConfig(data.general));
+        }
     };
 
     const updateLiveConversionReading = async (nextValue: boolean) => {
@@ -922,6 +944,32 @@ export const General = () => {
                                 checked={generalValue.show_candidate_window_after_space}
                                 onCheckedChange={(value) => void updateCandidateWindowDelay(value)}
                             />
+                        </div>
+
+                        <div className="grid grid-cols-[1fr_220px] items-center gap-4">
+                            <div className="space-y-1">
+                                <p className="text-sm font-medium leading-none">ライブ変換を始める文字数</p>
+                                <p className="text-xs text-muted-foreground">
+                                    読みがこの文字数に満たない間と、削除した直後はひらがなのまま表示します
+                                </p>
+                            </div>
+                            <div className="flex justify-end">
+                                <Select
+                                    value={String(generalValue.live_conversion_min_length)}
+                                    onValueChange={(value) => void updateLiveConversionMinLength(Number(value))}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="文字数を選択" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {LIVE_CONVERSION_MIN_LENGTH_OPTIONS.map((length) => (
+                                            <SelectItem key={length} value={String(length)}>
+                                                {length === 1 ? "1文字（すぐに変換）" : `${length}文字`}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
 
                         <div className="flex items-center gap-4">

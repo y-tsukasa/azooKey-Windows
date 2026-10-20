@@ -644,6 +644,9 @@ pub struct GeneralConfig {
     pub experimental_typo_correction: bool,
     #[serde(default)]
     pub kana_input: bool,
+    /// ライブ変換で漢字に変換し始める読みの文字数。これより短い間は読みのまま表示する。
+    #[serde(default = "default_live_conversion_min_length")]
+    pub live_conversion_min_length: u32,
 }
 
 impl Default for GeneralConfig {
@@ -663,6 +666,7 @@ impl Default for GeneralConfig {
                 LIVE_CONVERSION_READING_VERTICAL_ADJUSTMENT_DEFAULT,
             experimental_typo_correction: false,
             kana_input: false,
+            live_conversion_min_length: default_live_conversion_min_length(),
         }
     }
 }
@@ -857,6 +861,18 @@ mod tests {
         let enabled: GeneralConfig =
             serde_json::from_str(r#"{"experimental_typo_correction":true}"#).unwrap();
         assert!(enabled.experimental_typo_correction);
+    }
+
+    #[test]
+    fn live_conversion_min_length_defaults_to_two() {
+        assert_eq!(GeneralConfig::default().live_conversion_min_length, 2);
+
+        let deserialized: GeneralConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(deserialized.live_conversion_min_length, 2);
+
+        let custom: GeneralConfig =
+            serde_json::from_str(r#"{"live_conversion_min_length":4}"#).unwrap();
+        assert_eq!(custom.live_conversion_min_length, 4);
     }
 
     #[test]
@@ -1390,6 +1406,10 @@ fn default_punctuation_commit_target_enabled() -> bool {
 
 fn default_live_conversion_reading_enabled() -> bool {
     true
+}
+
+fn default_live_conversion_min_length() -> u32 {
+    2
 }
 
 fn default_live_conversion_reading_vertical_adjustment() -> i32 {
