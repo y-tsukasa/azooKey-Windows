@@ -7,7 +7,9 @@ use std::{
 };
 
 // Generated Tonic APIs prescribe tonic::Status as their error type.
-#[allow(clippy::result_large_err)]
+// Generated clients also mark functions returning futures as #[must_use], which newer
+// Clippy reports as double_must_use.
+#[allow(clippy::result_large_err, clippy::double_must_use)]
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/azookey.rs"));
     include!(concat!(env!("OUT_DIR"), "/window.rs"));
